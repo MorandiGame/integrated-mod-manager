@@ -1,5 +1,10 @@
 # 异环现有 Mod Loader 静态分析
 
+后续变更：外层 `Mod注入器.exe` 已增加“开启反虚化启动”和“不开反虚化启动”两个选择。
+它先切换游戏目录中的 `Anticensor.asi.asi`，再打开原有 `Game start.exe` 启动面板。
+原生 `Game start.exe`、`MyCustomLoader.dll`、`UniversalSigBypasser.asi` 没有改动。
+外层实现与验证见 `loader/README.md`；下文保留原始包装的逆向证据。
+
 分析日期：2026-10-12。读取原文件、提取 Python 字节码、分析 PE 导入/导出与 x64
 反汇编；没有运行或修改 bypass。下列地址是本次文件的静态虚拟地址，版本变化后不能照搬。
 这是调用链与关键逻辑的恢复，不等同于获得原作者的完整 C++ 工程。

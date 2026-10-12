@@ -12,6 +12,7 @@ tools/
 deployment-backup/
 acceptance/
 cleanup-pending/
+loader/__pycache__/
 config*.json
 dist
 dist-ssr
