@@ -44,6 +44,7 @@ export async function updateIni(tgt: string, foreground = 0) {
 	}
 }
 export async function setHotreload(enabled: 0 | 1 | 2, game: string, target: string): Promise<void> {
+	if (game === "NTE") enabled = 0;
 	try {
 		if (enabled > 0) {
 			const deps = await invoke("check_hotreload_dependencies") as {

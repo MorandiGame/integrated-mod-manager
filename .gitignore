@@ -8,6 +8,11 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+tools/
+deployment-backup/
+acceptance/
+cleanup-pending/
+config*.json
 dist
 dist-ssr
 *.local

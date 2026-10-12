@@ -28,13 +28,14 @@ export const managedSRC = "DISABLED - ALL MODS ARE STORED HERE (Managed by IMM)"
 export const managedTGT = "DO NOT MODIFY (Managed by IMM)";
 export const INI_BACKUP = "DISABLED_IMM_INI_BACKUP"; //If changed, also update in src-tauri/src/lib.rs
 export const VERSION = "4.0.0";
-export const GAMES: Games[] = ["WW", "ZZ", "GI", "SR", "EF"];
+export const GAMES: Games[] = ["WW", "ZZ", "GI", "SR", "EF", "NTE"];
 export const GAME_GB_IDS: { [key: number]: Games } = {
 	20357: "WW",
 	19567: "ZZ",
 	8552: "GI",
 	18366: "SR",
 	21842: "EF",
+	23012: "NTE",
 	0: "",
 };
 export const GAME_NAMES: { [key in Games]: string } = {
@@ -44,6 +45,7 @@ export const GAME_NAMES: { [key in Games]: string } = {
 	GI: "Genshin",
 	SR: "Star Rail",
 	EF: "Endfield",
+	NTE: "异环 / NTE",
 };
 export const exts = ["png", "jpg", "jpeg", "webp", "gif"];
 export const PRIORITY_KEYS = ["Alt", "Ctrl", "Shift", "Win", "Capslock", "Tab", "Up", "Down", "Left", "Right"] as const;
@@ -86,6 +88,7 @@ export const GAME_ID_MAP: { [key: string]: number } = {
 	GI: 2,
 	SR: 3,
 	EF: 4,
+	NTE: 5,
 };
 export const DEFAULTS = {
 	INIT_DONE: false,

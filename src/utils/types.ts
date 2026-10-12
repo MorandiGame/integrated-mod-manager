@@ -1,4 +1,4 @@
-export type Games = "WW" | "ZZ" | "GI" | "SR" | "EF" | ""; //| "GI" ;
+export type Games = "WW" | "ZZ" | "GI" | "SR" | "EF" | "NTE" | "";
 export type Language = "en" | "cn" | "ru" | "jp" | "kr" | "";
 export interface DirEntry {
 	name: string;
@@ -35,6 +35,7 @@ export interface GlobalSettings {
 	}
 }
 export interface GameSettings {
+	nteLoader?: string;
 	launch: 0 | 1 | 2;
 	hotReload: 0 | 1 | 2;
 	customCategories: { [key: string]: CustomCategory };

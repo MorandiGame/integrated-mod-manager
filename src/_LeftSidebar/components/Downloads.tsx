@@ -20,6 +20,7 @@ import {
 import { DownloadItem, ModData, ModDataObj } from "@/utils/types";
 import { UNCATEGORIZED } from "@/utils/consts";
 import { info } from "@/lib/logger";
+import { isNte } from "@/utils/nte";
 
 type DownloadQueueItem = DownloadItem & {
 	dlPath?: string;
@@ -172,6 +173,7 @@ function Downloads() {
 		saveConfigs();
 		invoke("download_and_unzip", {
 			fileName: item.name,
+			payloadFilename: isNte() ? item.fname : null,
 			downloadUrl: item.file,
 			savePath: toFs(item.dlPath),
 			key: item.key,
@@ -239,7 +241,8 @@ function Downloads() {
 			delete externalExtracts[key];
 			console.log("[IMM] Finished element:", finishedElement, "Dlpath:", finishedElement.dlPath, "Type:", type);
 			if (!finishedElement.dlPath) return;
-			await validateModDownload(finishedElement.dlPath, type == "manual");
+			try { await validateModDownload(finishedElement.dlPath, type == "manual"); }
+			catch (e) { markDownloadFailed(key, String(e), "validate"); return; }
 			if (type == "auto") {
 				const now = Date.now();
 				setData((prev) => {

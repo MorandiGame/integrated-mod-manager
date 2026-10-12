@@ -218,6 +218,27 @@
 	--success: #99ff88;
 	--warn: #f7c635;
 }
+[data-theme="nte"] {
+	--game-font-en: main;
+	--game-font-cn: main;
+	--game-font-jp: main;
+	--game-font-kr: main;
+	--game-font-ru: main;
+	--radius-main: 0.5rem;
+	--border-w-main: 0.0625rem;
+	--button: #25252c;
+	--background: #14141b;
+	--card: #1d1d26;
+	--accent: #beadff;
+	--border: #373244;
+	--input: #ffffff20;
+	--sidebar: var(--card);
+	--foreground: #eee9ff;
+	--destructive: #ff5d5d;
+	--success: #99ff88;
+	--warn: #f7c635;
+}
+
 /* Endfield Theme Variables */
 [data-theme="ef"] {
 	--game-font-en: ef;

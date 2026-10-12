@@ -19,6 +19,7 @@ use tauri_plugin_tracing::{tracing, Builder as Tracing, LevelFilter, MaxFileSize
 mod hotreload;
 mod image_server;
 mod logger_utils;
+mod nte;
 
 const PROGRESS_UPDATE_THRESHOLD: u64 = 1024;
 const BUFFER_SIZE: usize = 8192;
@@ -415,6 +416,7 @@ async fn download_and_unzip(
     save_path: String,
     key: String,
     emit: bool,
+    payload_filename: Option<String>,
 ) -> Result<(), String> {
     // Increment download count for this key
     if emit {
@@ -454,7 +456,9 @@ async fn download_and_unzip(
         })?;
     println!("test3");
 
-    let ext = response
+    let hinted_ext = payload_filename.as_deref().and_then(|n| Path::new(n).extension())
+        .and_then(|e| e.to_str()).filter(|e| ["pak", "utoc", "ucas"].iter().any(|x| e.eq_ignore_ascii_case(x)));
+    let ext = hinted_ext.or_else(|| response
         .url()
         .path_segments()
         .and_then(|segments| segments.last())
@@ -466,11 +470,17 @@ async fn download_and_unzip(
                 .get("content-type")
                 .and_then(|ct| ct.to_str().ok())
                 .and_then(|ct| mime_to_extension(ct))
-        })
+        }))
         .unwrap_or("")
         .to_owned();
 
-    let file_name = if !ext.is_empty() {
+    let file_name = if hinted_ext.is_some() {
+        let name = payload_filename.as_deref().unwrap();
+        if Path::new(name).file_name().and_then(|n| n.to_str()) != Some(name) || name.contains(['/', '\\', ':']) {
+            return Err("Invalid pak payload filename".into());
+        }
+        name.to_owned()
+    } else if !ext.is_empty() {
         format!("{}.{}", file_name, ext)
     } else {
         file_name
@@ -662,6 +672,10 @@ async fn download_and_unzip(
             )
             .map_err(|e| e.to_string())?;
 
+        if hinted_ext.is_some() {
+            decrement_download_count(&key);
+            app_handle.emit("fin", serde_json::json!({"key": key, "type": "auto"})).map_err(|e| e.to_string())?;
+        } else {
         // Extract archive if it's a supported format
         extract_archive(
             app_handle.clone(),
@@ -674,6 +688,7 @@ async fn download_and_unzip(
             true,
         )
         .await?;
+        }
     }
 
     tracing::info!(
@@ -982,6 +997,12 @@ pub fn run() {
             get_session_id,
             execute_with_args,
             create_symlink,
+            nte::nte_prepare_storage,
+            nte::nte_list_mods,
+            nte::nte_toggle_mod,
+            nte::nte_validate_mod,
+            nte::nte_split_variants,
+            nte::nte_launch_loader,
             extract_archive,
             set_window_icon,
             get_platform,

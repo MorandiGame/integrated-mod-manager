@@ -1,13 +1,13 @@
 import { Games } from "./types";
 import { LANG, store } from "./vars";
 
-type GameTheme = "wuwa" | "zzz" | "gi" | "sr" | "ef";
+type GameTheme = "wuwa" | "zzz" | "gi" | "sr" | "ef" | "nte";
 export type Language = "en" | "cn" | "jp" | "kr" | "ru";
 function gameToTheme(game: Games): GameTheme {
-	return ({ WW: "wuwa", ZZ: "zzz", GI: "gi", "": "", SR: "sr", EF: "ef" }[game] || "wuwa") as GameTheme;
+	return ({ WW: "wuwa", ZZ: "zzz", GI: "gi", "": "", SR: "sr", EF: "ef", NTE: "nte" }[game] || "wuwa") as GameTheme;
 }
 function themeToGame(theme: GameTheme): Games {
-	return ({ wuwa: "WW", zzz: "ZZ", gi: "GI", sr: "SR", ef: "EF" }[theme] || "WW") as Games;
+	return ({ wuwa: "WW", zzz: "ZZ", gi: "GI", sr: "SR", ef: "EF", nte: "NTE" }[theme] || "WW") as Games;
 }
 
 /**

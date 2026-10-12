@@ -14,6 +14,7 @@ import { encodeHotkeyForStorage, formatKeysToDisplay, sortHotkeys } from "@/util
 import { join, setHotreload } from "@/utils/hotreload";
 import { toFs } from "@/utils/pathsep";
 import { getCwd, setPrePostLaunch, setWindowType } from "@/utils/init";
+import { NTE_LOADER } from "@/utils/nte";
 import TEXT from "@/textData.json";
 import { exportConfig } from "@/utils/utils";
 import {
@@ -531,6 +532,19 @@ function Settings({ leftSidebarOpen }: { leftSidebarOpen: boolean }) {
 			icon: null,
 			content: (
 				<>
+					{settings.global.game === "NTE" && <>
+						<p className="px-4 text-sm text-muted-foreground">pak 保存在游戏外。启用建立目录链接，禁用只删除链接；已经载入的 pak 需要重启游戏后切换。</p>
+						<SettingRow label="Mod 注入器">
+							<Input readOnly value={settings.game.nteLoader || NTE_LOADER} />
+							<Button onClick={async () => {
+								const selected = await open({ multiple: false, filters: [{ name: "Mod注入器.exe", extensions: ["exe"] }] });
+								if (typeof selected === "string") {
+									setSettings(prev => ({ ...prev, game: { ...prev.game, nteLoader: selected } }));
+									await saveConfigs();
+								}
+							}}>选择</Button>
+						</SettingRow>
+					</>}
 					<SettingRow
 						label={
 							<>

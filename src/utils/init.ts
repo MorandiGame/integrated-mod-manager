@@ -24,7 +24,7 @@ import {
 	XXMI_DIR,
 	XXMI_MODE,
 } from "./vars";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import { type Update } from "@tauri-apps/plugin-updater";
 
 import { path } from "@tauri-apps/api";
 import { invoke } from "@tauri-apps/api/core";
@@ -49,6 +49,7 @@ import { Category, Games, Preset, Settings } from "./types";
 import { resetPageCounts } from "@/_Main/MainOnline";
 import { info } from "@/lib/logger";
 import { isVersionAtLeast, isVersionOlderThan } from "./semver";
+import { NTE_SOURCE, NTE_TARGET, NTE_LOADER, launchNteLoader } from "./nte";
 // import { v2_0_4_migration } from "./filesys";
 let paths = {
 	"": "",
@@ -59,6 +60,7 @@ let paths = {
 	SR: "",
 	XX: "",
 	EF: "",
+	NTE: "",
 };
 let isInPrePostLaunch = {
 	WW: false,
@@ -66,6 +68,7 @@ let isInPrePostLaunch = {
 	GI: false,
 	SR: false,
 	EF: false,
+	NTE: false,
 	"": false,
 };
 let target = "unknown";
@@ -127,6 +130,7 @@ export async function readXXMIConfig(path: string) {
 		SR: "",
 		XX: "",
 		EF: "",
+		NTE: "",
 	};
 	isInPrePostLaunch = {
 		WW: false,
@@ -134,6 +138,7 @@ export async function readXXMIConfig(path: string) {
 		GI: false,
 		SR: false,
 		EF: false,
+		NTE: false,
 		"": false,
 	};
 	if (path && path != "") {
@@ -309,6 +314,7 @@ export async function updateConfig(oconfig = null as any) {
 	return config;
 }
 export async function verifyGameDir(game: Games) {
+	if (game === "NTE") return { sourceDir: NTE_SOURCE, targetDir: NTE_TARGET };
 	const XXPath = paths[game];
 	const dirs = {
 		targetDir: "",
@@ -343,6 +349,12 @@ export async function initGame(game: Games, status = true) {
 		}
 	});
 	configXX.game = game;
+	if (game === "NTE") {
+		configXX.custom = 1;
+		configXX.sourceDir ||= NTE_SOURCE;
+		configXX.targetDir ||= NTE_TARGET;
+		configXX.settings = { ...configXX.settings, hotReload: 0, nteLoader: configXX.settings.nteLoader || NTE_LOADER };
+	}
 	if (configXX.settings.launch === 2 && !isInPrePostLaunch[game]) configXX.settings.launch = 0;
 	else if (isInPrePostLaunch[game]) configXX.settings.launch = 2;
 	switchGameTheme(game);
@@ -456,6 +468,13 @@ function removeHelpers() {
 	resetPageCounts();
 }
 export async function launchGame() {
+	if (config.game === "NTE") {
+		try {
+			await launchNteLoader();
+			addToast({ type: "info", message: "正在启动异环 Mod Loader；游戏加载 pak 后需要重启才能切换。" });
+		} catch (e) { addToast({ type: "error", message: String(e) }); }
+		return;
+	}
 	if (await exists(config.XXMI))
 		isGameProcessRunning(config.game).then((running) => {
 			if (!running) {
@@ -657,10 +676,8 @@ export async function main(useGame = "" as Games) {
 	store.set(MAIN_FUNC_STATUS, "fin");
 	let update: Update | null = null;
 	try {
-		const timeoutPromise = new Promise<never>((_, reject) =>
-			setTimeout(() => reject(new Error("Update check timeout")), 10000)
-		);
-		update = await Promise.race([check(platform == "linux" ? { target: platform + "-" + target } : {}), timeoutPromise]);
+		// An upstream installer would replace this fork and remove NTE support.
+		update = await Promise.resolve<Update | null>(null);
 	} catch (error) {
 		console.error("[IMM] Update check failed:", error);
 		update = null;

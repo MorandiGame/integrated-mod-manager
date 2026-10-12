@@ -44,6 +44,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import { error, info, warn } from "@/lib/logger";
 import { addToExtracts } from "@/_LeftSidebar/components/Downloads";
 import { isVersionOlderThan } from "./semver";
+import { isNte, prepareNteStorage, listNteMods, toggleNteMod } from "./nte";
 let staleCache = false;
 export async function setGame(game: string) {
 	try {
@@ -510,6 +511,7 @@ export async function checkOldVerDirs(src: string) {
 	}
 }
 export async function categorizeDir(src: string, modifyIni = false) {
+	if (isNte()) return;
 	info("[IMM] Categorizing directory:", src, "Skip restore:", modifyIni);
 	const d3dx_path = join(...tgt.split(/[/\\]/).slice(0, -1), "d3dx_user.ini");
 	let d3dx = "" as any;
@@ -629,6 +631,11 @@ export async function verifyDirStruct() {
 		title: "Confirm Changes",
 		skip: false,
 	};
+	if (isNte()) {
+		try { await prepareNteStorage(); status.skip = true; }
+		catch (e) { store.set(ERR, String(e)); }
+		return status;
+	}
 	try {
 		if (!(!!src && (await exists(src))) || !(!!tgt && (await exists(tgt))))
 			throw new Error("Source or Target not found: " + src + " | " + tgt);
@@ -838,6 +845,7 @@ export async function verifyDirStruct() {
 	}
 }
 export async function createManagedDir() {
+	if (isNte()) { await prepareNteStorage(); return true; }
 	info("[IMM] Creating managed directories...");
 	try {
 		if (!src) return false;
@@ -851,6 +859,7 @@ export async function createManagedDir() {
 	}
 }
 export async function applyChanges(isMigration = false) {
+	if (isNte()) { await prepareNteStorage(); return true; }
 	info("[IMM] Applying changes, isMigration:", isMigration);
 	try {
 		if (!src || !tgt) return false;
@@ -1266,6 +1275,7 @@ async function detectHotkeys(
 	return [processedEntries, hashes, hotkeyData, namespaces];
 }
 export async function getModDetails(relPath: string, data?: ModDataObj) {
+	if (isNte()) return { keys: [], files: {}, namespaces: new Set<string>() };
 	delete data?.children;
 	const [category, modName] = relPath.split(/[/\\]/);
 	const modSrc = join(src, managedSRC);
@@ -1324,6 +1334,7 @@ export async function getModDetails(relPath: string, data?: ModDataObj) {
 }
 let deepRefreshId = 0;
 export async function refreshModList(maxed = false) {
+	if (isNte()) return await listNteMods(maxed);
 	info("[IMM] Refreshing mod list...");
 	let before = Date.now();
 	let curId = deepRefreshId;
@@ -1495,6 +1506,17 @@ export async function validateModDownload(path: string, skip = false, addModSrc 
 	if (addModSrc && !path.startsWith(join(src, managedSRC))) {
 		path = join(src, managedSRC, path);
 	}
+	if (isNte()) {
+		const relative = toInternal(path).slice(toInternal(join(src, managedSRC)).length + 1);
+		const paths = await invoke<string[]>("nte_split_variants", { sourceDir: toFs(src), targetDir: toFs(tgt), modPath: relative });
+		store.set(DATA, prev => {
+			const original = prev[relative] || {};
+			return { ...prev, ...Object.fromEntries(paths.map(p => [p, { ...original, ...(paths.length > 1 ? { note: `${original.note || ""}\n原包包含多个 pak；按原说明选择主文件和附件，互斥外观不要同时启用。` } : {}) }])) };
+		});
+		await saveConfigs();
+		if (!skip) addToast({ type: "success", message: "异环 pak 已下载到外部库，默认禁用。" });
+		return 0;
+	}
 	console.log("[IMM] Validating mod download for path:", path);
 	let count = 0;
 	try {
@@ -1595,7 +1617,8 @@ export async function cleanCancelledDownload(path: string) {
 }
 export async function changeModName(path: string, newPath: string, add = false) {
 	try {
-		const enabled = add || (await toggleMod(path, false));
+		const enabled = isNte() ? (!add && (await listNteMods()).some(m => m.path === path && m.enabled)) : add || (await toggleMod(path, false));
+		if (isNte() && !add) await toggleNteMod(path, false);
 		await mkdir(join(src, managedSRC, ...newPath.split(/[/\\]/).slice(0, -1)), { recursive: true });
 		await rename(add ? join(src, path) : join(src, managedSRC, path), join(src, managedSRC, newPath));
 		store.set(DATA, (prev) => {
@@ -1644,6 +1667,12 @@ export async function deleteRestorePoint(point: string) {
 	}
 }
 export async function deleteMod(path: string) {
+	if (isNte()) {
+		await toggleNteMod(path, false);
+		await remove(join(src, managedSRC, path), { recursive: true });
+		addToast({ type: "success", message: textData._Toasts.Deleted });
+		return;
+	}
 	const modSrc = join(src, managedSRC, path);
 	const modTgt = join(tgt, managedTGT, path);
 
@@ -1663,6 +1692,7 @@ export async function deleteMod(path: string) {
 	}
 }
 async function updateDataFromD3DXIni(modPaths: string | string[]) {
+	if (isNte()) return;
 	let mods = [] as string[];
 	if (Array.isArray(modPaths)) {
 		mods = modPaths;
@@ -1726,6 +1756,7 @@ async function updateDataFromD3DXIni(modPaths: string | string[]) {
 	info("[IMM] Updating data from ini for mod data:", data);
 }
 async function updatePrefsIniFromData(modPath: string, oldPath = "") {
+	if (isNte()) return;
 	const data = store.get(DATA)[modPath];
 	if (!data || !data.vars) return;
 	const [category, name] = modPath.split(/[/\\]/);
@@ -1821,6 +1852,10 @@ export function openFile(relPath: string) {
 	openPath(toFs(join(modRoot, relPath)));
 }
 export async function toggleMod(path: string, enabled: boolean, forced = false): Promise<boolean> {
+	if (isNte()) {
+		try { return forced ? true : await toggleNteMod(path, enabled); }
+		catch (e) { addToast({ type: "error", message: String(e) }); return false; }
+	}
 	info("[IMM] Togglingx mod:", path, "Enabled:", enabled);
 	try {
 		const modSrc = join(src, managedSRC, path);
@@ -1922,6 +1957,14 @@ export async function savePreviewImage(path: string) {
 	return true;
 }
 export async function applyPreset(data: string[], name = "") {
+	if (isNte()) {
+		// Keep foreign files and directories intact. Only toggle verified library links.
+		const mods = await listNteMods();
+		for (const mod of mods.filter(m => m.enabled && !data.includes(m.path))) await toggleNteMod(mod.path, false);
+		for (const mod of data) await toggleNteMod(mod, true);
+		if (name) addToast({ type: "success", message: textData._Toasts.PresetApplied });
+		return;
+	}
 	try {
 		const entries = (await readDirRecr(join(tgt, managedTGT), "", 2)).flatMap((x) => x.children || []);
 		const disablePromises: Promise<boolean>[] = entries.map((entry) => toggleMod(entry.path, false));

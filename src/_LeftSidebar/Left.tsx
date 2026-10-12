@@ -132,7 +132,7 @@ function LeftSidebar() {
 									<div className="fixed opacity-0 -mb-16 -ml-16 blur-md peer-hover:blur-none hover:blur-none peer-hover:mb-0 peer-hover:ml-0 pointer-events-none peer-hover:opacity-100 peer-hover:pointer-events-auto duration-300  hover:pointer-events-auto hover:opacity-100 hover:ml-0 hover:mb-0  -left-0.5 bottom-0.5 -translate-x-1/2 translate-y-1/2 rounded-full border w-72  aspect-square flex flex-col items-center gap-2 z-10  bg-sidebar/20 backdrop-blur-xs">
 										<Button
 											onClick={() => launchGame()}
-											disabled={!!customMode}
+											disabled={!!customMode && game !== "NTE"}
 											className="bg-tra absolute flex active:scale-100 items-center justify-end h-40 w-40 bg-transparent border rounded-full ml-0.5 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
 										>
 											<div className="w-20 h-20 rounded-tr-full mt-4 -mr-3 text-[0.625rem] flex flex-col items-center justify-center  -translate-y-1/2">
