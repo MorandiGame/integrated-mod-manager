@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { LANG_LIST } from "@/utils/consts";
 import { resetWithBackup } from "@/utils/filesys";
 import TEXT from "@/textData.json";
-import { MAIN_FUNC_STATUS, SAVED_LANG } from "@/utils/vars";
+import { GAME, MAIN_FUNC_STATUS, SAVED_LANG } from "@/utils/vars";
 import { useAtom, useAtomValue } from "jotai";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +14,7 @@ function Page1({ setPage }: { setPage: (page: number) => void }) {
 	const [selectedIndex, setSelectedIndex] = useState(-1);
 	const [currentLangIndex, setCurrentLangIndex] = useState(-1);
 	const mainFuncStatus = useAtomValue(MAIN_FUNC_STATUS);
+	const game = useAtomValue(GAME);
 	const escPressRef = useRef({ count: 0, lastTime: 0 });
 	const languageKeys = ["en", "cn", "ru", "jp", "kr"] as const;
 	const [savedLang, setSavedLang] = useAtom(SAVED_LANG);
@@ -21,13 +22,16 @@ function Page1({ setPage }: { setPage: (page: number) => void }) {
 		if (savedLang && mainFuncStatus=="fin" && !timer) {
 			timer = setTimeout(
 				() => {
-					setPage(1);
+					setPage(game ? 2 : 1);
 					timer = null;
 				},
 				loadTime ? Math.max(0, 1500 - (Date.now() - loadTime)) : 1500
 			);
 		}
-	}, [savedLang,mainFuncStatus]);
+		return () => {
+			if (timer) { clearTimeout(timer); timer = null; }
+		};
+	}, [savedLang,mainFuncStatus,game]);
 	useEffect(() => {
 		loadTime = Date.now();
 		interval = setInterval(() => {

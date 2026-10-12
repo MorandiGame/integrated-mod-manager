@@ -627,6 +627,9 @@ export async function main(useGame = "" as Games) {
 		store.set(SAVED_LANG, config.lang);
 	}
 	config.lang = store.get(SAVED_LANG) || config.lang;
+	// resetAtoms clears LANG, while SAVED_LANG may retain the same value and not
+	// emit a subscription update. Restore it explicitly on every game switch.
+	if (config.lang) store.set(LANG, config.lang);
 	if (!config.XXMI && !config.game && !config.lang) {
 		store.set(MAIN_FUNC_STATUS, "First time setup detected, checking for WWMM");
 		info("[IMM] First time setup detected, checking for WWMM...");

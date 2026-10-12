@@ -153,7 +153,10 @@ function Page2({ setPage }: { setPage: (page: number) => void }) {
 					<img src="/EFLogo.png" className="max-h-40 mt-5 -mb-3 scale-110" />
 					<label className="mt-8 text-2xl">{GAME_NAMES.EF}</label>
 				</div>
-				<button onClick={() => switchGame("NTE")} disabled={selected !== ""}
+				<button onClick={() => {
+					if (!settings.global.game) initGame("NTE", false);
+					else switchGame("NTE");
+				}} disabled={selected !== ""}
 					className="flex duration-200 hover:-mt-2 active:scale-90 p-6 rounded-md aspect-3/2 w-56 min-h-70 flex-col items-center justify-center">
 					<img src="/NTELogo.png" alt="Neverness To Everness" className="h-32 w-32 object-contain rounded-xl" />
 					<label className="mt-8 text-2xl">{GAME_NAMES.NTE}</label>

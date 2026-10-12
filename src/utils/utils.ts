@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { IMAGE_SERVER, managedSRC } from "./consts";
+import { applyImageFallback } from "./imageFallback";
 import {
 	DATA,
 	DEV_HIDE_PREVIEWS,
@@ -87,12 +88,8 @@ export function formatSize(size: number): string {
 				: (size / 1000000000).toFixed(2) + "GB";
 }
 export function handleImageError(event: React.SyntheticEvent<HTMLImageElement, Event>, hideOnError = false): void {
-	const target = event.currentTarget;
-	if (hideOnError) {
-		target.style.opacity = "0";
-		target.classList.remove("fadein");
-	}
-	target.src = `/${store.get(GAME) || "WW"}mm.png`;
+	const game = store.get(GAME) || "WW";
+	applyImageFallback(event.currentTarget, game === "NTE" ? "/NTELogo.png" : `/${game}mm.png`, hideOnError);
 }
 export function preventContextMenu(event: React.MouseEvent): void {
 	event.preventDefault();

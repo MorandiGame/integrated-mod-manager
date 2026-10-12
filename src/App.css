@@ -238,6 +238,8 @@
 	--success: #99ff88;
 	--warn: #f7c635;
 }
+[data-theme="nte"] .logo { background-image: url("/NTELogo.png"); }
+[data-theme="nte"] .bg-bgg { background-image: none; }
 
 /* Endfield Theme Variables */
 [data-theme="ef"] {
