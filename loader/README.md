@@ -1,24 +1,28 @@
-# 异环注入器启动选项
+# 异环单窗口 Mod 启动器
 
-`nte_launch_options.py` replaces only the outer `Mod注入器.exe` launcher.
-It displays **开启反虚化启动** and **不开反虚化启动**, configures the optional
-Anticensor ASI, then opens the existing `Mod Loader/Game start.exe` with its original
-working directory. The original Mod Loader panel remains responsible for launching
-the game and injection. This wrapper does not alter the CBT hook or signature bypass.
+`nte_launch_options.py` now replaces `Mod Loader/Game start.exe` itself. The original
+outer `Mod注入器.exe` is restored to its plain forwarding role, so opening from IMM
+shows only this panel. There are two buttons: **开启反虚化启动** and **不开反虚化启动**.
+No author support or language controls are present.
 
-The game directory is resolved from `Mod Loader/config.ini`'s `Launcher` setting.
-Anticensor is registered outside the game under adjacent `Optional Plugins` with its
+One click configures the optional ASI, prepares the original loader plugins,
+loads the original `MyCustomLoader.dll`, obtains its `CBTProc` export, installs the
+original global `WH_CBT` hook (5, thread 0), and opens the official launcher from
+`config.ini`. Tk keeps pumping Windows messages while waiting for the game.
+After detecting HTGame, it waits the original 15 seconds before unhooking and
+releasing the DLL. Keep the panel open until the completion message appears.
+This status confirms the startup sequence, not that every ASI or pak loaded.
+
+Anticensor is stored externally under adjacent `Optional Plugins` with its
 original filename, relative location and SHA-256. The observed installation uses
 `HT/Binaries/Win64/Anticensor.asi.asi`; the double extension is preserved. Turning it
-off moves this allowlisted plugin outside the game; turning it on restores its exact
-bytes. `cutils.dll` and all other ASIs remain unchanged.
+off moves only this registered plugin outside the game; turning it on restores its
+bytes. `cutils.dll` and existing matching bypass plugins remain unchanged.
+Unknown conflicting plugins are rejected. Failed hook or launcher startup releases
+the hook and restores the previous optional-plugin mode. A running game blocks mode
+changes. Game paths and launcher settings remain in the existing config.ini.
 
-Do not switch while `HTGame.exe` is running. The wrapper rejects duplicated,
-unrecognized or modified plugin files instead of overwriting them. A process-launch
-failure restores the prior plugin state. The optional ASI is supplied locally by the
-user and is not distributed in this repository.
-
-Validation: `python -m unittest discover -s loader -p 'test_*.py' -v`.
-Build with PyInstaller `--onefile --windowed --uac-admin --name Mod注入器`.
-Deploy the resulting exe to the existing external loader directory; IMM's configured
-injector path and the original inner loader binaries do not need to change.
+Validation: `python -m unittest discover -s loader -p 'test_*.py' -v` (9 tests).
+Build with PyInstaller `--onefile --windowed --uac-admin --name "Game start"`.
+Deploy to the existing external `Mod Loader` directory. No IMM rebuild is needed.
+Runtime injection and in-game effect are tested by the user.

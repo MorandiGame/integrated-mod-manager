@@ -2,9 +2,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
-from nte_launch_options import AnticensorController, register_plugin, start_existing_loader
+from nte_launch_options import AnticensorController, register_plugin, start_game, installation_root, NativeHook
 
 
 class LaunchChoicesTests(unittest.TestCase):
@@ -27,6 +27,9 @@ class LaunchChoicesTests(unittest.TestCase):
         (loader / "plugins").mkdir(parents=True)
         for file in (loader / "Game start.exe", loader / "MyCustomLoader.dll", loader / "plugins/UniversalSigBypasser.asi"):
             file.write_bytes(b"existing-loader")
+        self.launcher = self.root / "NTELauncher.exe"
+        self.launcher.write_bytes(b"launcher")
+        (loader / "config.ini").write_text("[Settings]\nLauncher=" + str(self.launcher), encoding="utf-8")
 
     def test_on_off_preserves_bytes_and_other_plugins(self):
         self.controller.set_enabled(False)
@@ -53,20 +56,66 @@ class LaunchChoicesTests(unittest.TestCase):
     def test_running_game_does_not_change_files(self):
         with patch("nte_launch_options.game_is_running", return_value=True):
             with self.assertRaises(ValueError):
-                start_existing_loader(self.launch_root, False, self.controller)
+                start_game(self.launch_root, False, self.controller)
         self.assertTrue(self.plugin.exists())
 
-    def test_loader_start_failure_rolls_back_mode(self):
-        with patch("nte_launch_options.game_is_running", return_value=False), patch("nte_launch_options.subprocess.Popen", side_effect=OSError("fixture")):
+    def test_launcher_failure_releases_hook_and_rolls_back_mode(self):
+        hook = Mock()
+        with patch("nte_launch_options.game_is_running", return_value=False):
             with self.assertRaises(OSError):
-                start_existing_loader(self.launch_root, False, self.controller)
+                start_game(self.launch_root, False, self.controller,
+                           hook_factory=Mock(return_value=hook), launch=Mock(side_effect=OSError("fixture")))
+        hook.close.assert_called_once()
         self.assertEqual(self.plugin.read_bytes(), b"original-optional-plugin")
 
-    def test_loader_uses_original_working_directory(self):
-        with patch("nte_launch_options.game_is_running", return_value=False), patch("nte_launch_options.subprocess.Popen") as spawn:
-            start_existing_loader(self.launch_root, False, self.controller)
+    def test_one_click_hooks_then_launches_official_without_second_panel(self):
+        sequence = []
+        hook = Mock()
+        def install(dll):
+            sequence.append("hook")
+            self.assertEqual(dll, self.launch_root / "Mod Loader/MyCustomLoader.dll")
+            return hook
+        def launch(path):
+            sequence.append("launch")
+            self.assertEqual(path, self.launcher)
+        with patch("nte_launch_options.game_is_running", return_value=False):
+            result = start_game(self.launch_root, False, self.controller, install, launch)
+        self.assertEqual(sequence, ["hook", "launch"])
+        self.assertIs(result, hook)
+        hook.close.assert_not_called()
         self.assertFalse(self.plugin.exists())
-        self.assertEqual(spawn.call_args.kwargs["cwd"], str(self.launch_root / "Mod Loader"))
+        self.assertEqual((self.game / "plugins/UniversalSigBypasser.asi").read_bytes(), b"existing-loader")
+        self.assertEqual(self.bypass.read_bytes(), b"keep-bypass")
+
+    def test_conflicting_bypass_refused_before_toggle(self):
+        plugins = self.game / "plugins"
+        plugins.mkdir()
+        target = plugins / "UniversalSigBypasser.asi"
+        target.write_bytes(b"other")
+        with patch("nte_launch_options.game_is_running", return_value=False):
+            with self.assertRaises(ValueError):
+                start_game(self.launch_root, False, self.controller)
+        self.assertTrue(self.plugin.exists())
+        self.assertEqual(target.read_bytes(), b"other")
+
+    def test_native_hook_uses_original_export_and_correct_64bit_handles(self):
+        kernel, user = Mock(), Mock()
+        kernel.LoadLibraryW.return_value = 0x100000000
+        kernel.GetProcAddress.return_value = 0x100001000
+        user.SetWindowsHookExW.return_value = 0x200000000
+        user.UnhookWindowsHookEx.return_value = 1
+        with patch("nte_launch_options.ctypes.WinDLL", side_effect=[kernel, user]):
+            hook = NativeHook(Path("original.dll"))
+        kernel.GetProcAddress.assert_called_once_with(0x100000000, b"CBTProc")
+        user.SetWindowsHookExW.assert_called_once_with(5, 0x100001000, 0x100000000, 0)
+        hook.close()
+        hook.close()
+        user.UnhookWindowsHookEx.assert_called_once_with(0x200000000)
+        kernel.FreeLibrary.assert_called_once_with(0x100000000)
+
+    def test_both_entry_paths_resolve_same_installation(self):
+        self.assertEqual(installation_root(self.launch_root / "Mod Loader/Game start.exe"), self.launch_root)
+        self.assertEqual(installation_root(self.launch_root / "Mod注入器.exe"), self.launch_root)
 
     def test_refuses_manifest_path_traversal(self):
         manifest = self.storage / "anticensor.json"
