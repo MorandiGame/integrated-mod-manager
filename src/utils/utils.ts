@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { IMAGE_SERVER, managedSRC } from "./consts";
 import { applyImageFallback } from "./imageFallback";
+import { latestModFileDate, modUpdateStatus, type ObservedFileVersions } from "./modUpdateStatus";
 import {
 	DATA,
 	DEV_HIDE_PREVIEWS,
@@ -213,7 +214,7 @@ let initialCheck = true;
 const oneHour = 60 * 60 * 1000;
 function loadCheckedCache(): Record<string, { updated: number; status: number }> {
 	try {
-		const cached = localStorage.getItem("mod_check_cache");
+		const cached = localStorage.getItem("mod_check_cache_v2");
 		if (!cached) return {};
 		const parsed = JSON.parse(cached);
 		const now = Date.now();
@@ -236,13 +237,19 @@ function loadCheckedCache(): Record<string, { updated: number; status: number }>
 // Save cached data to localStorage
 function saveCheckedCache(cache: Record<string, { updated: number; status: number }>) {
 	try {
-		localStorage.setItem("mod_check_cache", JSON.stringify(cache));
+		localStorage.setItem("mod_check_cache_v2", JSON.stringify(cache));
 	} catch (err) {
 		error("[IMM] Error saving cache to localStorage:", err);
 	}
 }
 
 const checked: Record<string, { updated: number; status: number }> = loadCheckedCache();
+const observedFileVersions: ObservedFileVersions = (() => {
+	try {
+		const value = JSON.parse(localStorage.getItem("mod_observed_file_versions") || "{}");
+		return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+	} catch { return {}; }
+})();
 let now = Date.now();
 export function handleInAppLink(url: string) {
 	if (url.startsWith("imm://mode/")) return;
@@ -285,24 +292,18 @@ export function useInstalledItemsManager() {
 				if (!check) {
 					return 0;
 				}
-				if (checked.hasOwnProperty(item.name) && now - (checked[item.name]?.updated || 0) < oneHour) {
+				const cacheKey = modRouteFromURL(item.source);
+				if (!cacheKey) return 0;
+				if (checked.hasOwnProperty(cacheKey) && now - (checked[cacheKey]?.updated || 0) < oneHour) {
 					// info("[IMM] Mod status found in cache for", item.name);
-					modStatus = item.updated < checked[item.name].status ? (item.viewed < checked[item.name].status ? 2 : 1) : 0;
+					modStatus = modUpdateStatus(item, checked[cacheKey].status, observedFileVersions);
 				} else {
 					try {
-						info("[IMM] Fetching mod url ", modRouteFromURL(item.source),`inCache: ${checked.hasOwnProperty(item.name)} | updated: ${item.updated} | cacheUpdated: ${checked[item.name]?.updated} | now: ${now}`);
-						const data = (await fetchModNoUpdates(modRouteFromURL(item.source))) as any;
-						if (data._tsDateModified) {
-							let latest = item.updated || 0;
-							data._aFiles.forEach((file: any) => {
-								latest = Math.max(latest, (file._tsDateModified || file._tsDateAdded || 0) * 1000);
-							});
-							modStatus = item.updated < latest ? (item.viewed < latest ? 2 : 1) : 0;
-							checked[item.name] = { updated: now, status: latest };
-						}
-						else{
-							checked[item.name] = { updated: now, status: 0 };
-						}
+						info("[IMM] Fetching mod file versions", cacheKey);
+						const data = (await fetchModNoUpdates(cacheKey)) as any;
+						const latest = latestModFileDate(data._aFiles);
+						modStatus = modUpdateStatus(item, latest, observedFileVersions);
+						checked[cacheKey] = { updated: now, status: latest };
 					} catch (error) {
 						return 0;
 					}
@@ -321,6 +322,7 @@ export function useInstalledItemsManager() {
 						return {
 							name: key,
 							source: modData.source as string,
+							observationKey: JSON.stringify([store.get(GAME), key, modData.source, modData.addedAt || modData.installedAt || 0]),
 							updated: modData.updatedAt || 0,
 							viewed: modData.viewedAt || 0,
 							modStatus: 0,
@@ -338,7 +340,7 @@ export function useInstalledItemsManager() {
 				if (!check) info("[IMM] Mod update checking is disabled.");
 				for (let i = 0; i < itemsToProcess.length; i += batchSize) {
 					const batch = itemsToProcess.slice(i, i + batchSize);
-					const newInBatch = batch.filter((item) => !checked.hasOwnProperty(item.name));
+					const newInBatch = batch.filter((item) => !checked.hasOwnProperty(modRouteFromURL(item.source)));
 					const batchResults = await Promise.all(
 						batch.map(async (item) => {
 							const modStatus = await checkModStatus(item);
@@ -360,6 +362,8 @@ export function useInstalledItemsManager() {
 				info("[IMM] Mod status check completed. New updates found:", newCount);
 				// Save the updated cache to localStorage
 				saveCheckedCache(checked);
+				try { localStorage.setItem("mod_observed_file_versions", JSON.stringify(observedFileVersions)); }
+				catch (e) { error("[IMM] Failed to persist observed file versions", e); }
 
 				if (initialCheck && totalItems) {
 					initialCheck = false;
