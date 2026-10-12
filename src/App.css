@@ -158,8 +158,9 @@
 	--foreground: #e6e6e6;
 	--sidebar: #0f0f0f;
 }
-/* WuWa Theme Variables */
-[data-theme="wuwa"] {
+/* NTE reuses the existing default IMM/WuWa colors and fonts. */
+[data-theme="wuwa"],
+[data-theme="nte"] {
 	--game-font-en: wuwa;
 	--game-font-cn: wuwa;
 	--game-font-jp: wuwa;
@@ -214,26 +215,6 @@
 	--input: oklch(100% 0.00011 271.152 / 0.15);
 	--sidebar: var(--card);
 	--foreground: #cfd2d5;
-	--destructive: #ff5d5d;
-	--success: #99ff88;
-	--warn: #f7c635;
-}
-[data-theme="nte"] {
-	--game-font-en: main;
-	--game-font-cn: main;
-	--game-font-jp: main;
-	--game-font-kr: main;
-	--game-font-ru: main;
-	--radius-main: 0.5rem;
-	--border-w-main: 0.0625rem;
-	--button: #25252c;
-	--background: #14141b;
-	--card: #1d1d26;
-	--accent: #beadff;
-	--border: #373244;
-	--input: #ffffff20;
-	--sidebar: var(--card);
-	--foreground: #eee9ff;
 	--destructive: #ff5d5d;
 	--success: #99ff88;
 	--warn: #f7c635;
