@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import sys
 import uuid
 
@@ -110,6 +111,65 @@ class AnticensorController:
         os.replace(staged, self.target)
 
 
+class SkinSwitchController:
+    """Enable the skin-only pak bundle with one owned directory junction."""
+    FILENAMES = {"1_999_P.pak", "1_999_P.utoc", "1_999_P.ucas"}
+
+    def __init__(self, game_bin: Path, storage: Path):
+        if redirected(storage):
+            raise ValueError("皮肤切换存储目录不能重定向。")
+        self.source = storage.resolve(strict=True)
+        self.paks = game_bin.resolve(strict=True).parents[1] / "Content/Paks"
+        self.target = self.paks / "Mods/IMM-SkinSwitch"
+        metadata = json.loads((self.source / "skin-switch.json").read_text(encoding="utf-8-sig"))
+        self.hashes = metadata["files"]
+        if set(self.hashes) != self.FILENAMES:
+            raise ValueError("皮肤切换包清单不完整。")
+        if self.source.is_relative_to(self.paks.parent):
+            raise ValueError("皮肤切换源文件必须存放在游戏目录之外。")
+        self.verify()
+
+    def verify(self):
+        for name, expected in self.hashes.items():
+            file = self.source / name
+            if not file.is_file() or redirected(file) or digest(file) != expected:
+                raise ValueError(f"皮肤切换文件 {name} 缺失或校验不符。")
+
+    def is_enabled(self):
+        if not os.path.lexists(self.target):
+            return False
+        if not redirected(self.target) or self.target.resolve() != self.source:
+            raise ValueError("IMM-SkinSwitch 已有其他文件，拒绝覆盖。")
+        return True
+
+    def set_enabled(self, enabled: bool):
+        if game_is_running():
+            raise ValueError("请先退出异环，再切换皮肤 Mod。")
+        self.verify()
+        active = self.is_enabled()
+        if active == enabled:
+            return
+        if enabled:
+            if any((self.paks / name).exists() for name in self.FILENAMES):
+                raise ValueError("Paks 中已存在原版 1_999_P，请先移除或禁用原版，避免重复加载。")
+            self.target.parent.mkdir(parents=True, exist_ok=True)
+            if redirected(self.target.parent):
+                raise ValueError("Mods 目录不能重定向。")
+            if sys.platform == "win32":
+                subprocess.run(["cmd", "/d", "/c", "mklink", "/J", str(self.target), str(self.source)],
+                               check=True, capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                self.target.symlink_to(self.source, target_is_directory=True)
+            if not self.is_enabled():
+                raise ValueError("建立皮肤切换链接后校验失败。")
+        else:
+            # Remove only the verified junction node, never the external source files.
+            if self.target.is_symlink():
+                self.target.unlink()
+            else:
+                os.rmdir(self.target)
+
+
 def game_binary_directory(loader_dir: Path) -> Path:
     config = configparser.ConfigParser()
     config.read(loader_dir / "config.ini", encoding="utf-8-sig")
@@ -201,7 +261,8 @@ def launch_official(launcher: Path):
 
 
 def start_game(root: Path, enabled: bool, controller: AnticensorController,
-               hook_factory=NativeHook, launch=launch_official):
+               hook_factory=NativeHook, launch=launch_official,
+               skin_controller=None, skin_enabled=None):
     if game_is_running():
         raise ValueError("请先退出异环，再选择是否开启反虚化。")
     loader_dir = root / "Mod Loader"
@@ -234,15 +295,22 @@ def start_game(root: Path, enabled: bool, controller: AnticensorController,
         if not target.exists():
             shutil.copy2(source, target)
     previous_mode = controller.is_enabled()
-    controller.set_enabled(enabled)
+    previous_skin = skin_controller.is_enabled() if skin_controller else None
     hook = None
     try:
+        controller.set_enabled(enabled)
+        if skin_controller:
+            if not isinstance(skin_enabled, bool):
+                raise ValueError("皮肤切换选项缺失。")
+            skin_controller.set_enabled(skin_enabled)
         hook = hook_factory(dll)
         launch(launcher)
         return hook
     except Exception:
         if hook:
             hook.close()
+        if skin_controller:
+            skin_controller.set_enabled(previous_skin)
         controller.set_enabled(previous_mode)
         raise
 
@@ -259,7 +327,7 @@ def main() -> None:
     window = tk.Tk()
     window.title("异环 Mod 启动器")
     window.resizable(False, False)
-    window.geometry("560x260")
+    window.geometry("600x310")
     style = ttk.Style(window)
     if "vista" in style.theme_names():
         style.theme_use("vista")
@@ -269,6 +337,14 @@ def main() -> None:
     ttk.Label(panel, text="选择反虚化启动方式", font=("Microsoft YaHei UI", 15)).pack(pady=(0, 10))
     status = tk.StringVar(value="选择后直接注入并启动异环官方启动器。")
     ttk.Label(panel, textvariable=status, font=("Microsoft YaHei UI", 10)).pack(pady=(0, 15))
+    skin_choice = tk.BooleanVar(value=False)
+    try:
+        current_skin = SkinSwitchController(game_binary_directory(root_path / "Mod Loader"), root_path / "Optional Mods/SkinSwitch")
+        skin_choice.set(current_skin.is_enabled())
+    except (OSError, ValueError, KeyError, configparser.Error):
+        pass
+    skin_check = ttk.Checkbutton(panel, text="启用皮肤切换（- 切换服装 / = 切换染色）", variable=skin_choice)
+    skin_check.pack(anchor="w", pady=(0, 16))
     buttons = ttk.Frame(panel)
     buttons.pack(fill="x")
     buttons.columnconfigure((0, 1), weight=1)
@@ -304,19 +380,21 @@ def main() -> None:
             controller = AnticensorController(game_bin, root_path / "Optional Plugins")
             if active_hook:
                 return
-            active_hook = start_game(root_path, enabled, controller)
+            skin_controller = SkinSwitchController(game_bin, root_path / "Optional Mods/SkinSwitch")
+            active_hook = start_game(root_path, enabled, controller, skin_controller=skin_controller, skin_enabled=skin_choice.get())
         except Exception as error:
             messagebox.showerror("无法启动", str(error), parent=window)
             return
+        skin_check.configure(state="disabled")
         for button in buttons.winfo_children():
             button.configure(state="disabled")
         status.set("已启动官方启动器；请启动游戏，等待注入完成。")
         window.after(1000, await_game)
     ttk.Button(buttons, text="开启反虚化启动", style="Launch.TButton", command=lambda: choose(True)).grid(row=0, column=0, sticky="ew", padx=(0, 8))
     ttk.Button(buttons, text="不开反虚化启动", style="Launch.TButton", command=lambda: choose(False)).grid(row=0, column=1, sticky="ew", padx=(8, 0))
-    ttk.Label(panel, text="切换反虚化需要先退出游戏。", font=("Microsoft YaHei UI", 9)).pack(pady=(14, 0))
+    ttk.Label(panel, text="切换功能需要先退出游戏；勾选状态在点击启动时生效。", font=("Microsoft YaHei UI", 9)).pack(pady=(14, 0))
     window.update_idletasks()
-    window.geometry(f"{max(560, window.winfo_reqwidth())}x{max(260, window.winfo_reqheight())}")
+    window.geometry(f"{max(600, window.winfo_reqwidth())}x{max(310, window.winfo_reqheight())}")
     window.mainloop()
 
 

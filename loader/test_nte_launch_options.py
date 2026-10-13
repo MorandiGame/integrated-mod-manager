@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch, Mock
 
-from nte_launch_options import AnticensorController, register_plugin, start_game, installation_root, NativeHook
+from nte_launch_options import AnticensorController, register_plugin, start_game, installation_root, NativeHook, SkinSwitchController, digest
 
 
 class LaunchChoicesTests(unittest.TestCase):
@@ -116,6 +116,84 @@ class LaunchChoicesTests(unittest.TestCase):
     def test_both_entry_paths_resolve_same_installation(self):
         self.assertEqual(installation_root(self.launch_root / "Mod Loader/Game start.exe"), self.launch_root)
         self.assertEqual(installation_root(self.launch_root / "Mod注入器.exe"), self.launch_root)
+
+    def make_skin_controller(self):
+        storage = self.launch_root / "Optional Mods/SkinSwitch"
+        storage.mkdir(parents=True)
+        hashes = {}
+        for name in SkinSwitchController.FILENAMES:
+            file = storage / name
+            file.write_bytes(("fixture " + name).encode())
+            hashes[name] = digest(file)
+        (storage / "skin-switch.json").write_text(json.dumps({"files": hashes}), encoding="utf-8")
+        return SkinSwitchController(self.game, storage)
+
+    def test_skin_junction_roundtrip_preserves_source_and_other_mods(self):
+        skin = self.make_skin_controller()
+        other = skin.target.parent / "OtherMod"
+        other.mkdir(parents=True)
+        (other / "other.pak").write_bytes(b"untouched")
+        with patch("nte_launch_options.game_is_running", return_value=False):
+            skin.set_enabled(True)
+            skin.set_enabled(True)
+            self.assertTrue(skin.is_enabled())
+            for name in skin.FILENAMES:
+                self.assertEqual((skin.target / name).read_bytes(), (skin.source / name).read_bytes())
+            skin.set_enabled(False)
+            skin.set_enabled(False)
+        self.assertFalse(skin.is_enabled())
+        self.assertTrue(all((skin.source / n).is_file() for n in skin.FILENAMES))
+        self.assertEqual((other / "other.pak").read_bytes(), b"untouched")
+
+    def test_skin_refuses_modified_bundle_and_existing_regular_directory(self):
+        skin = self.make_skin_controller()
+        (skin.source / "1_999_P.pak").write_bytes(b"unknown")
+        with patch("nte_launch_options.game_is_running", return_value=False):
+            with self.assertRaises(ValueError):
+                skin.set_enabled(True)
+        skin = self.make_skin_controller_after_cleanup(skin)
+        skin.target.mkdir(parents=True)
+        (skin.target / "keep.txt").write_bytes(b"keep")
+        with self.assertRaises(ValueError):
+            skin.is_enabled()
+        self.assertEqual((skin.target / "keep.txt").read_bytes(), b"keep")
+
+    def make_skin_controller_after_cleanup(self, skin):
+        hashes = {}
+        for name in skin.FILENAMES:
+            file = skin.source / name
+            file.write_bytes(("fixture " + name).encode())
+            hashes[name] = digest(file)
+        (skin.source / "skin-switch.json").write_text(json.dumps({"files": hashes}), encoding="utf-8")
+        return SkinSwitchController(self.game, skin.source)
+
+    def test_skin_refuses_original_bundle_conflict(self):
+        skin = self.make_skin_controller()
+        skin.paks.mkdir(parents=True)
+        (skin.paks / "1_999_P.pak").write_bytes(b"original")
+        with patch("nte_launch_options.game_is_running", return_value=False):
+            with self.assertRaises(ValueError):
+                skin.set_enabled(True)
+        self.assertFalse(skin.is_enabled())
+
+    def test_skin_running_game_cannot_change_link(self):
+        skin = self.make_skin_controller()
+        with patch("nte_launch_options.game_is_running", return_value=True):
+            with self.assertRaises(ValueError):
+                skin.set_enabled(True)
+        self.assertFalse(skin.is_enabled())
+
+    def test_failed_launch_rolls_back_both_independent_options(self):
+        skin = self.make_skin_controller()
+        hook = Mock()
+        with patch("nte_launch_options.game_is_running", return_value=False):
+            with self.assertRaises(OSError):
+                start_game(self.launch_root, False, self.controller,
+                           hook_factory=Mock(return_value=hook), launch=Mock(side_effect=OSError("fixture")),
+                           skin_controller=skin, skin_enabled=True)
+        self.assertTrue(self.plugin.exists())
+        self.assertFalse(skin.is_enabled())
+        hook.close.assert_called_once()
 
     def test_refuses_manifest_path_traversal(self):
         manifest = self.storage / "anticensor.json"
