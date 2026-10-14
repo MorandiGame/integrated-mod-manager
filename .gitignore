@@ -13,6 +13,9 @@ deployment-backup/
 acceptance/
 cleanup-pending/
 loader/__pycache__/
+scripts/__pycache__/
+scripts/nte-skin-asset-rewriter/bin/
+scripts/nte-skin-asset-rewriter/obj/
 config*.json
 dist
 dist-ssr
