@@ -36,6 +36,14 @@ def main():
         if i not in (15, 17):
             assert len(actual['Exports'][i]['ScriptBytecode']) == 2, i
     mesh = actual['Exports'][30]['ScriptBytecode']
+    assert len(actual['Exports'][31]['ScriptBytecode']) == 2
+    plan = read(ROOT / 'skin-only-plan.json')['address_map']
+    old = read(ROOT / 'universal/base-measure.json')['2']['addresses']
+    skip_index = old.index(plan['2985'])
+    end_index = old.index(plan['13500'])
+    skip = actual['Exports'][2]['ScriptBytecode'][skip_index]
+    assert skip['$type'].split(',')[0].endswith('EX_Jump')
+    assert skip['CodeOffset'] == measure['2']['addresses'][end_index]
     assert mesh[8]['ContextExpression']['StackNode'] == -107  # Original mesh refresh.
     assert mesh[8]['ContextExpression']['Parameters'][0] == mesh[4]['Variable']  # Captured old data.
     assert mesh[9]['ContextExpression']['Parameters'][2]['Variable']['New']['Path'] == ['InCharacterID']

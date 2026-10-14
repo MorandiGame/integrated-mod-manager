@@ -70,6 +70,11 @@ def main():
     for old in (233, 270, 311, 366, 406):
         code[at(old)] = expr('EX_Nothing')
     code[at(443)]['Expression'] = role()
+    # BeginPlay still enables the two input keys, then returns without creating
+    # the original on-screen shortcut widget. Suppress its text update helper too.
+    code[at(2985)] = expr('EX_Jump', CodeOffset=old_map[13500])
+    exports[31]['ScriptBytecode'] = [expr('EX_Return', ReturnExpression=expr('EX_Nothing')),
+                                   expr('EX_EndOfScript')]
 
     mesh = copy.deepcopy(exports[30]['ScriptBytecode'])
     mesh[0]['AssignmentExpression'] = actor(mesh[0]['VariableExpression']['Variable'])
@@ -144,6 +149,7 @@ def main():
     (ROOT / 'universal/build-plan.json').write_text(json.dumps({
         'profile': 'skin-only-current-role', 'imports': [controller, actor_getter, role_getter],
         'role_cache_checked_per_key': True, 'input_events': [15, 17],
+        'on_screen_hint': False,
         'native_implementation_and_in_game_result_verified': False,
     }, indent=2), encoding='utf-8')
 

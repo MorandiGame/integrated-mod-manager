@@ -3,6 +3,9 @@
 该模块只保留 `-` 服装切换、`=` 染色切换。输入绑定仅两条，其余输入事件及 Tick
 均为空函数；没有恢复瞬移、飞行、NPC 操作或位置保存。
 
+用户验证换装效果后要求移除顶部提示：BeginPlay 在启用输入后直接返回，不再创建
+快捷键提示 Widget，TXT9 提示更新函数也改为空函数。两个操作按键仍保留。
+
 角色识别由对象显示名称拆分，改成游戏反射接口：
 `GetPlayerController(0) → HTPlayerController.GetPlayerCharacter() →
 HTPlayerCharacter.GetCurrentDisplayCharacterID()`。
